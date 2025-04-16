@@ -1,6 +1,5 @@
+streamlit
 openai
-streamlit
-streamlit
 streamlit-folium
-
+folium
 
