@@ -1,33 +1,51 @@
 import streamlit as st
-from openai import OpenAI
-import os
+import openai
+from datetime import datetime
 
-# Clé API via secrets
-api_key = st.secrets["openai"]["api_key"]
+st.set_page_config(
+    page_title="CoachBot - Assistant Sportif avec IA",
+    page_icon="🤖",
+    layout="centered",
+    initial_sidebar_state="expanded"
+)
 
-# Création du client OpenAI
-client = OpenAI(api_key=api_key)
+# ---------- BARRE LATÉRALE ----------
+st.sidebar.title("🧭 Menu")
+st.sidebar.markdown("Bienvenue dans CoachBot !")
 
-# App UI
-st.title("🤖 CoachBot - Assistant Sportif avec IA")
-st.write("Pose-moi une question sur l'entraînement ou la nutrition 👇")
+st.sidebar.markdown("---")
+st.sidebar.markdown("📅 Date : " + datetime.now().strftime("%d/%m/%Y"))
+st.sidebar.markdown("🧠 Basé sur OpenAI")
+st.sidebar.markdown("💬 Pose une question ci-dessous")
 
-message = st.text_input("Que veux-tu savoir ?")
+# ---------- EN-TÊTE PRINCIPAL ----------
+st.markdown(
+    "<h1 style='text-align: center; color: #4CAF50;'>🤖 CoachBot - Assistant Sportif avec IA</h1>", 
+    unsafe_allow_html=True
+)
+st.markdown("<p style='text-align: center;'>Pose-moi une question sur l'entraînement ou la nutrition 👇</p>", unsafe_allow_html=True)
 
+# ---------- INPUT UTILISATEUR ----------
+question = st.text_input("💬 Que veux-tu savoir ?", placeholder="Ex : Comment prendre du muscle rapidement ?")
+
+# ---------- FONCTION D’APPEL À OPENAI ----------
 def repondre_ia(prompt):
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Tu es un coach sportif professionnel."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content
-
-# Affichage
-if message:
     try:
-        reponse = repondre_ia(message)
-        st.write("**CoachBot** :", reponse)
+        client = openai.OpenAI(api_key=st.secrets["openai"]["api_key"])
+        completion = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        return completion.choices[0].message.content
     except Exception as e:
-        st.error(f"Erreur : {e}")
+        return f"❌ Erreur : {e}"
+
+# ---------- AFFICHAGE DE LA RÉPONSE ----------
+if question:
+    with st.spinner("CoachBot réfléchit... 🤔"):
+        reponse = repondre_ia(question)
+
+    st.markdown("### ✅ Réponse de CoachBot :")
+    st.success(reponse)
+
