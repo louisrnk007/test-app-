@@ -74,7 +74,7 @@ if choix == "Nouveau client":
                 "historique": []
             }
             sauvegarder_clients(clients)
-            st.experimental_rerun()
+          st.rerun()
         else:
             st.sidebar.warning("Ce client existe déjà.")
 else:
