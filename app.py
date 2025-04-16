@@ -4,7 +4,7 @@ from datetime import datetime
 
 st.set_page_config(
     page_title="CoachBot - Assistant Sportif avec IA",
-    page_icon="🤖",
+    page_icon="🏋️‍♂️",
     layout="centered",
     initial_sidebar_state="expanded"
 )
@@ -15,8 +15,8 @@ st.sidebar.markdown("Bienvenue dans CoachBot !")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("📅 Date : " + datetime.now().strftime("%d/%m/%Y"))
-st.sidebar.markdown("🧠 Basé sur OpenAI")
 st.sidebar.markdown("💬 Pose une question ci-dessous")
+st.sidebar.markdown("💪 Programme")
 
 # ---------- EN-TÊTE PRINCIPAL ----------
 st.markdown(
