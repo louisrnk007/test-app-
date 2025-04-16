@@ -38,7 +38,7 @@ if client_select == "Nouveau client":
         with open(f"clients/{client_id}.json", "w") as f:
             json.dump(client_data, f, indent=2)
         st.success(f"Client {prenom} {nom} créé !")
-        st.experimental_rerun()
+        st.rerun()
 else:
     client_id = client_select
     with open(f"clients/{client_id}.json") as f:
