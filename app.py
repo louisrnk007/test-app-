@@ -2,92 +2,113 @@ import streamlit as st
 import openai
 import json
 import os
-from datetime import datetime
+import datetime
+import requests
 
-st.set_page_config(
-    page_title="CoachBot - Assistant Sportif avec IA",
-    page_icon="🤖",
-    layout="centered"
-)
+# --- Configuration ---
+openai.api_key = st.secrets["openai"]["api_key"]
+CLIENTS_FILE = "clients.json"
 
-# 🔍 Chargement des clients existants
-if not os.path.exists("clients"):
-    os.makedirs("clients")
+def charger_clients():
+    if os.path.exists(CLIENTS_FILE):
+        with open(CLIENTS_FILE, "r") as f:
+            return json.load(f)
+    return {}
 
-clients = [f.replace(".json", "") for f in os.listdir("clients") if f.endswith(".json")]
-st.sidebar.title("🤝 Bienvenue dans CoachBot")
-client_select = st.sidebar.selectbox("Choisir un client", ["Nouveau client"] + clients)
+def sauvegarder_clients(clients):
+    with open(CLIENTS_FILE, "w") as f:
+        json.dump(clients, f, indent=2)
 
-# 📄 Formulaire client ou chargement
-if client_select == "Nouveau client":
-    st.sidebar.markdown("**📄 Créer un nouveau client**")
-    nom = st.sidebar.text_input("Nom")
-    prenom = st.sidebar.text_input("Prénom")
-    objectif = st.sidebar.selectbox("Objectif", ["Perte de poids", "Prise de masse", "Remise en forme", "Autre"])
-    niveau = st.sidebar.radio("Niveau", ["Débutant", "Intermédiaire", "Avancé"])
+def envoyer_question(question):
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": question}]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Erreur : {e}"
 
-    if st.sidebar.button("Créer ce client"):
-        client_id = f"{prenom.lower()}_{nom.lower()}"
-        client_data = {
-            "nom": nom,
-            "prenom": prenom,
-            "objectif": objectif,
-            "niveau": niveau,
-            "historique": []
-        }
-        with open(f"clients/{client_id}.json", "w") as f:
-            json.dump(client_data, f, indent=2)
-        st.success(f"Client {prenom} {nom} créé !")
-        st.rerun()
+def afficher_salles_autour():
+    # Cette fonction utilise IPinfo pour estimer la position et place des markers avec Leaflet
+    try:
+        ip = requests.get("https://api.ipify.org").text
+        data = requests.get(f"https://ipinfo.io/{ip}/json").json()
+        if "loc" in data:
+            lat, lon = map(float, data["loc"].split(","))
+            st.map(data=[{"lat": lat, "lon": lon}], zoom=12)
+    except:
+        st.warning("Impossible de localiser l'utilisateur.")
+
+# --- Interface Streamlit ---
+st.set_page_config(page_title="CoachBot", layout="centered")
+st.markdown("<h1 style='text-align: center;'>🤖 Assistant Sportif</h1>", unsafe_allow_html=True)
+
+# Chargement des clients
+clients = charger_clients()
+client_id = None
+
+# --- Barre latérale ---
+st.sidebar.title("👋 Bienvenue")
+st.sidebar.write("Gérer les clients")
+choix = st.sidebar.selectbox("Choisir un client", ["Nouveau client"] + list(clients.keys()))
+
+if choix == "Nouveau client":
+    with st.sidebar.form("formulaire_client"):
+        email = st.text_input("Email")
+        nom = st.text_input("Nom")
+        prenom = st.text_input("Prénom")
+        objectif = st.selectbox("Objectif", ["Remise en forme", "Prise de masse", "Perte de poids"])
+        niveau = st.radio("Niveau", ["Débutant", "Intermédiaire", "Avancé"])
+        submit = st.form_submit_button("Créer ce client")
+
+    if submit and email and nom:
+        client_id = email.lower()
+        if client_id not in clients:
+            clients[client_id] = {
+                "nom": nom,
+                "prenom": prenom,
+                "email": email,
+                "objectif": objectif,
+                "niveau": niveau,
+                "historique": []
+            }
+            sauvegarder_clients(clients)
+            st.experimental_rerun()
+        else:
+            st.sidebar.warning("Ce client existe déjà.")
 else:
-    client_id = client_select
-    with open(f"clients/{client_id}.json") as f:
-        client_data = json.load(f)
-    st.sidebar.success(f"Client chargé : {client_data['prenom']} {client_data['nom']}")
+    client_id = choix
+    client = clients[client_id]
+    st.sidebar.markdown(f"**{client['prenom']} {client['nom']}**")
+    st.sidebar.markdown(f"Objectif : `{client['objectif']}` | Niveau : `{client['niveau']}`")
 
-# 🔍 Clé API et initialisation OpenAI
-client_openai = openai.OpenAI(api_key=st.secrets["openai"]["api_key"])
+# --- Partie centrale ---
+if client_id:
+    st.markdown("<h4>Pose-moi une question sur l'entraînement ou la nutrition :</h4>", unsafe_allow_html=True)
+    question = st.text_input("💬 Ta question", placeholder="Ex : Quel est le meilleur déjeuner pour la muscu ?")
 
-st.title("🤖 CoachBot - Assistant Sportif avec IA")
-st.write("Pose-moi une question sur l'entraînement ou la nutrition :")
+    if question:
+        reponse = envoyer_question(question)
+        st.markdown(f"**CoachBot** : {reponse}")
 
-question = st.text_input("💬 Ta question", placeholder="Ex : Quel est le meilleur déjeuner pour la muscu ?")
+        clients[client_id]["historique"].append({
+            "date": datetime.datetime.now().isoformat(),
+            "question": question,
+            "reponse": reponse
+        })
+        sauvegarder_clients(clients)
 
-# 🧠 Fonction de réponse
-def repondre_ia(prompt):
-    completion = client_openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Tu es un coach sportif professionnel qui donne des conseils utiles, motivants et adaptés."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return completion.choices[0].message.content
-
-# 🔄 Interaction et sauvegarde
-if question:
-    with st.spinner("CoachBot réfléchit..."):
-        reponse = repondre_ia(question)
-        st.success("CoachBot :")
-        st.markdown(reponse)
-
-        # 🔢 Enregistrement dans le fichier du client
-        if client_select != "Nouveau client":
-            client_data["historique"].append({
-                "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "question": question,
-                "reponse": reponse
-            })
-            with open(f"clients/{client_id}.json", "w") as f:
-                json.dump(client_data, f, indent=2)
-
-# 📜 Affichage historique
-if client_select != "Nouveau client" and client_data["historique"]:
-    with st.expander("📓 Historique des questions du client"):
-        for item in reversed(client_data["historique"]):
-            st.markdown(f"**🗓️ {item['date']}**")
-            st.markdown(f"**Q :** {item['question']}")
-            st.markdown(f"**A :** {item['reponse']}")
+    if st.checkbox("📜 Voir les anciennes questions"):
+        for echange in reversed(clients[client_id]["historique"]):
+            st.markdown(f"**{echange['date'].split('T')[0]}**")
+            st.write(f"**Q:** {echange['question']}")
+            st.write(f"**A:** {echange['reponse']}")
             st.markdown("---")
+
+    if st.checkbox("📍 Salles de sport à proximité"):
+        afficher_salles_autour()
+else:
+    st.info("Crée un client dans le menu latéral pour commencer.")
 
 
