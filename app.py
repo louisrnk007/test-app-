@@ -1,114 +1,86 @@
 import streamlit as st
-import openai
 import json
 import os
-import datetime
-import requests
+import folium
+from streamlit_folium import st_folium
 
-# --- Configuration ---
-openai.api_key = st.secrets["openai"]["api_key"]
+# Fichier pour stocker les clients
 CLIENTS_FILE = "clients.json"
 
+# Initialisation
+if not os.path.exists(CLIENTS_FILE):
+    with open(CLIENTS_FILE, "w") as f:
+        json.dump({}, f)
+
+# Chargement des données
 def charger_clients():
-    if os.path.exists(CLIENTS_FILE):
-        with open(CLIENTS_FILE, "r") as f:
-            return json.load(f)
-    return {}
+    with open(CLIENTS_FILE, "r") as f:
+        return json.load(f)
 
 def sauvegarder_clients(clients):
     with open(CLIENTS_FILE, "w") as f:
         json.dump(clients, f, indent=2)
 
-def envoyer_question(question):
-    try:
-        response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": question}]
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Erreur : {e}"
-
-def afficher_salles_autour():
-    # Cette fonction utilise IPinfo pour estimer la position et place des markers avec Leaflet
-    try:
-        ip = requests.get("https://api.ipify.org").text
-        data = requests.get(f"https://ipinfo.io/{ip}/json").json()
-        if "loc" in data:
-            lat, lon = map(float, data["loc"].split(","))
-            st.map(data=[{"lat": lat, "lon": lon}], zoom=12)
-    except:
-        st.warning("Impossible de localiser l'utilisateur.")
-
-# --- Interface Streamlit ---
-st.set_page_config(page_title="CoachBot", layout="centered")
-st.markdown("<h1 style='text-align: center;'>🤖 Assistant Sportif</h1>", unsafe_allow_html=True)
-
-# Chargement des clients
 clients = charger_clients()
-client_id = None
 
-# --- Barre latérale ---
-st.sidebar.title("👋 Bienvenue")
-st.sidebar.write("Gérer les clients")
-choix = st.sidebar.selectbox("Choisir un client", ["Nouveau client"] + list(clients.keys()))
+# Interface Streamlit
+st.set_page_config(page_title="CoachBot", layout="wide")
 
-if choix == "Nouveau client":
-    with st.sidebar.form("formulaire_client"):
-        email = st.text_input("Email")
-        nom = st.text_input("Nom")
-        prenom = st.text_input("Prénom")
-        objectif = st.selectbox("Objectif", ["Remise en forme", "Prise de masse", "Perte de poids"])
-        niveau = st.radio("Niveau", ["Débutant", "Intermédiaire", "Avancé"])
-        submit = st.form_submit_button("Créer ce client")
+# Sidebar - Gestion des clients
+st.sidebar.title("👋 Bienvenue dans CoachBot")
+st.sidebar.subheader("Gérer les clients")
 
-    if submit and email and nom:
-        client_id = email.lower()
-        if client_id not in clients:
-            clients[client_id] = {
+email_selection = st.sidebar.selectbox("Choisir un client", ["Nouveau client"] + list(clients.keys()))
+
+if email_selection == "Nouveau client":
+    st.sidebar.subheader("📄 Créer un nouveau client")
+    email = st.sidebar.text_input("E-mail")
+    nom = st.sidebar.text_input("Nom")
+    prenom = st.sidebar.text_input("Prénom")
+    objectif = st.sidebar.selectbox("Objectif", ["Remise en forme", "Prise de masse", "Perte de poids", "Sport santé"])
+    niveau = st.sidebar.radio("Niveau", ["Débutant", "Intermédiaire", "Avancé"])
+    
+    if st.sidebar.button("Créer ce client"):
+        if email and nom and prenom:
+            clients[email] = {
                 "nom": nom,
                 "prenom": prenom,
-                "email": email,
                 "objectif": objectif,
                 "niveau": niveau,
                 "historique": []
             }
             sauvegarder_clients(clients)
-          st.rerun()
+            st.success(f"Client {prenom} {nom} créé !")
+            st.rerun()
         else:
-            st.sidebar.warning("Ce client existe déjà.")
+            st.sidebar.warning("Merci de remplir tous les champs.")
 else:
-    client_id = choix
-    client = clients[client_id]
-    st.sidebar.markdown(f"**{client['prenom']} {client['nom']}**")
-    st.sidebar.markdown(f"Objectif : `{client['objectif']}` | Niveau : `{client['niveau']}`")
-
-# --- Partie centrale ---
-if client_id:
-    st.markdown("<h4>Pose-moi une question sur l'entraînement ou la nutrition :</h4>", unsafe_allow_html=True)
+    client = clients[email_selection]
+    st.markdown(f"<h1 style='text-align:center;'>🤖 Assistant Sportif avec IA</h1>", unsafe_allow_html=True)
+    
+    st.subheader("Pose-moi une question sur l'entraînement ou la nutrition :")
     question = st.text_input("💬 Ta question", placeholder="Ex : Quel est le meilleur déjeuner pour la muscu ?")
 
     if question:
-        reponse = envoyer_question(question)
+        # Simule une réponse IA ici (tu peux l'adapter à ton back OpenAI)
+        reponse = f"Tu m'as demandé : {question} → Voici une réponse personnalisée basée sur ton profil ({client['objectif']}, niveau {client['niveau']})."
+
+        # Affichage
         st.markdown(f"**CoachBot** : {reponse}")
 
-        clients[client_id]["historique"].append({
-            "date": datetime.datetime.now().isoformat(),
-            "question": question,
-            "reponse": reponse
-        })
+        # Historique
+        client["historique"].append({"question": question, "reponse": reponse})
         sauvegarder_clients(clients)
 
-    if st.checkbox("📜 Voir les anciennes questions"):
-        for echange in reversed(clients[client_id]["historique"]):
-            st.markdown(f"**{echange['date'].split('T')[0]}**")
-            st.write(f"**Q:** {echange['question']}")
-            st.write(f"**A:** {echange['reponse']}")
-            st.markdown("---")
+    # Affichage historique
+    if client["historique"]:
+        st.subheader("📜 Historique de tes questions :")
+        for item in reversed(client["historique"][-5:]):
+            st.markdown(f"- **Q** : {item['question']}\n- **A** : {item['reponse']}")
 
-    if st.checkbox("📍 Salles de sport à proximité"):
-        afficher_salles_autour()
-else:
-    st.info("Crée un client dans le menu latéral pour commencer.")
-
-
+    # Affichage d'une carte avec les salles de sport à proximité
+    st.subheader("📍 Salles de sport proches")
+    m = folium.Map(location=[50.633, 5.567], zoom_start=13)  # tu peux changer les coords
+    folium.Marker(location=[50.633, 5.567], popup="Basic-Fit").add_to(m)
+    folium.Marker(location=[50.629, 5.570], popup="Jims Fitness").add_to(m)
+    st_folium(m, width=700, height=400)
