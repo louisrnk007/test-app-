@@ -1,25 +1,33 @@
 import streamlit as st
 from openai import OpenAI
+import os
 
-# 🔐 Sécurité de la clé API
-client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+# Clé API via secrets
+api_key = st.secrets["openai"]["api_key"]
 
+# Création du client OpenAI
+client = OpenAI(api_key=api_key)
+
+# App UI
 st.title("🤖 CoachBot - Assistant Sportif avec IA")
 st.write("Pose-moi une question sur l'entraînement ou la nutrition 👇")
 
 message = st.text_input("Que veux-tu savoir ?")
 
 def repondre_ia(prompt):
-    completion = client.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "Tu es un coach sportif professionnel qui donne des conseils utiles, motivants et adaptés."},
+            {"role": "system", "content": "Tu es un coach sportif professionnel."},
             {"role": "user", "content": prompt}
         ]
     )
-    return completion.choices[0].message.content
+    return response.choices[0].message.content
 
+# Affichage
 if message:
-    with st.spinner("CoachBot réfléchit..."):
+    try:
         reponse = repondre_ia(message)
-        st.success(reponse)
+        st.write("**CoachBot** :", reponse)
+    except Exception as e:
+        st.error(f"Erreur : {e}")
